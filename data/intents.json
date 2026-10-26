@@ -1,0 +1,161 @@
+
+{
+  "intents": [
+    {
+      "tag": "greeting",
+      "patterns": [
+        "hello",
+        "hi",
+        "hey there",
+        "good morning",
+        "good afternoon",
+        "how are you",
+        "is anyone there",
+        "hello chatbot",
+        "hi there",
+        "hey"
+      ],
+      "responses": [
+        "Hello! How can I help you?",
+        "Hi there! What would you like to know?",
+        "Hey! I'm here to help."
+      ]
+    },
+    {
+      "tag": "goodbye",
+      "patterns": [
+        "bye",
+        "goodbye",
+        "see you later",
+        "talk to you later",
+        "have a nice day",
+        "I am leaving",
+        "catch you later",
+        "see you soon",
+        "take care",
+        "good night"
+      ],
+      "responses": [
+        "Goodbye! Have a great day.",
+        "See you soon!",
+        "Thanks for chatting. Take care!"
+      ]
+    },
+    {
+      "tag": "thanks",
+      "patterns": [
+        "thank you",
+        "thanks",
+        "thanks a lot",
+        "I appreciate it",
+        "that was helpful",
+        "many thanks",
+        "thank you so much",
+        "you helped me",
+        "much appreciated",
+        "thanks for your help"
+      ],
+      "responses": [
+        "You're welcome!",
+        "Happy to help!",
+        "Glad I could help."
+      ]
+    },
+    {
+      "tag": "bot_identity",
+      "patterns": [
+        "who are you",
+        "what are you",
+        "are you a chatbot",
+        "tell me about yourself",
+        "what is your name",
+        "are you a robot",
+        "introduce yourself",
+        "who am I talking to",
+        "are you human",
+        "what should I call you"
+      ],
+      "responses": [
+        "I'm an NLP chatbot built to understand messages and respond to common questions.",
+        "I'm your chatbot assistant. I can help with common queries."
+      ]
+    },
+    {
+      "tag": "help",
+      "patterns": [
+        "help me",
+        "what can you do",
+        "how can you help me",
+        "I need assistance",
+        "show me your features",
+        "I need some help",
+        "can you assist me",
+        "what are your capabilities",
+        "please help",
+        "I need support"
+      ],
+      "responses": [
+        "I can respond to greetings, answer basic questions, and help with common queries.",
+        "Tell me what you need help with, and I'll do my best."
+      ]
+    },
+    {
+      "tag": "hours",
+      "patterns": [
+        "what are your working hours",
+        "when are you available",
+        "are you available now",
+        "when can I talk to you",
+        "what time do you work",
+        "are you online",
+        "can I chat with you now",
+        "when do you close",
+        "are you available all day",
+        "when can I use you"
+      ],
+      "responses": [
+        "I'm available whenever the chatbot application is running.",
+        "You can chat with me while the application is online."
+      ]
+    },
+    {
+      "tag": "capabilities",
+      "patterns": [
+        "can you answer questions",
+        "do you understand English",
+        "can you understand my messages",
+        "how do you work",
+        "can you recognize intent",
+        "what language do you understand",
+        "can you understand text",
+        "how do you understand me",
+        "what is natural language processing",
+        "what is NLP"
+      ],
+      "responses": [
+        "I use NLP and machine learning to classify messages and select responses.",
+        "I analyze your text to identify its likely intent."
+      ]
+    },
+    {
+      "tag": "fallback",
+      "patterns": [
+        "I have a question",
+        "I want to ask something",
+        "can you explain something",
+        "I am confused",
+        "I do not understand",
+        "I need information",
+        "can you tell me more",
+        "I have a problem",
+        "please explain this",
+        "I need more details"
+      ],
+      "responses": [
+        "Could you please explain your question in more detail?",
+        "I'm not sure I understand. Could you rephrase that?",
+        "Please provide more details so I can try to help."
+      ]
+    }
+  ]
+}
