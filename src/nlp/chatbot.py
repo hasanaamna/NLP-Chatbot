@@ -10,7 +10,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_FILE = PROJECT_ROOT / "data" / "intents.json"
 MODEL_FILE = PROJECT_ROOT / "models" / "intent_classifier.joblib"
 
-# Initial threshold; we will tune it using validation examples.
 CONFIDENCE_THRESHOLD = 0.40
 
 
@@ -18,12 +17,7 @@ class NLPChatbot:
     def __init__(self):
         if not MODEL_FILE.exists():
             raise FileNotFoundError(
-                "Trained model not found. Run: python -m src.nlp.train"
-            )
-
-        if not DATA_FILE.exists():
-            raise FileNotFoundError(
-                f"Intent dataset not found: {DATA_FILE}"
+                "Model not found. Run: python -m src.nlp.train"
             )
 
         self.model = joblib.load(MODEL_FILE)
@@ -32,56 +26,71 @@ class NLPChatbot:
             dataset = json.load(file)
 
         self.intents = {
-            intent["tag"]: intent
-            for intent in dataset["intents"]
+            item["tag"]: item
+            for item in dataset["intents"]
         }
 
-        self.fallback_responses = self.intents.get(
-            "fallback",
-            {
-                "responses": [
-                    "I'm not sure I understand. Could you rephrase that?"
-                ]
-            },
-        )["responses"]
+        self.pattern_to_intent = {}
+
+        for intent in dataset["intents"]:
+            if intent["tag"] == "fallback":
+                continue
+
+            for pattern in intent["patterns"]:
+                normalized = self.normalize(pattern)
+                self.pattern_to_intent[normalized] = intent["tag"]
+
+        self.fallback_responses = self.intents["fallback"]["responses"]
+
+    @staticmethod
+    def normalize(text):
+        """Normalize text for exact phrase matching."""
+        return " ".join(text.casefold().split()).strip()
 
     def get_response(self, message):
-        """Predict the intent and return an appropriate response."""
         if not isinstance(message, str) or not message.strip():
             return {
                 "intent": "fallback",
                 "confidence": 0.0,
+                "method": "input_validation",
                 "response": "Please enter a message so I can help you.",
             }
 
+        normalized = self.normalize(message)
+
+        # 1. Match known phrases directly.
+        if normalized in self.pattern_to_intent:
+            intent = self.pattern_to_intent[normalized]
+            response = random.choice(self.intents[intent]["responses"])
+
+            return {
+                "intent": intent,
+                "confidence": 1.0,
+                "method": "exact_match",
+                "response": response,
+            }
+
+        # 2. Use the trained model for other messages.
         probabilities = self.model.predict_proba([message])[0]
         classes = self.model.classes_
 
         best_index = probabilities.argmax()
-        predicted_intent = str(classes[best_index])
+        intent = str(classes[best_index])
         confidence = float(probabilities[best_index])
 
-        # Use a fallback when the model is not sufficiently confident.
         if confidence < CONFIDENCE_THRESHOLD:
             return {
                 "intent": "fallback",
                 "confidence": round(confidence, 4),
-                "response": random.choice(self.fallback_responses),
-            }
-
-        intent_data = self.intents.get(predicted_intent)
-
-        if not intent_data or not intent_data.get("responses"):
-            return {
-                "intent": "fallback",
-                "confidence": round(confidence, 4),
+                "method": "low_confidence",
                 "response": random.choice(self.fallback_responses),
             }
 
         return {
-            "intent": predicted_intent,
+            "intent": intent,
             "confidence": round(confidence, 4),
-            "response": random.choice(intent_data["responses"]),
+            "method": "model_prediction",
+            "response": random.choice(self.intents[intent]["responses"]),
         }
 
 
@@ -109,7 +118,8 @@ def main():
         print(f"Chatbot: {result['response']}")
         print(
             f"[Intent: {result['intent']} | "
-            f"Confidence: {result['confidence']:.2f}]\n"
+            f"Confidence: {result['confidence']:.2f} | "
+            f"Method: {result['method']}]\n"
         )
 
 
