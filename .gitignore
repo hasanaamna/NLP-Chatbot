@@ -1,4 +1,4 @@
-@'
+
 # Python
 __pycache__/
 *.py[cod]
@@ -18,18 +18,18 @@ ENV/
 .env.*
 !.env.example
 
-# Trained models and generated data
-models/
+# Generated data and trained models
 data/processed/
+models/
 *.joblib
 *.pkl
 
-# Frontend
+# Frontend dependencies and build output
 frontend/node_modules/
 frontend/dist/
 frontend/.env.local
 
-# IDE and OS
+# IDE and operating system
 .vscode/
 .idea/
 .DS_Store
@@ -37,4 +37,3 @@ Thumbs.db
 
 # Logs
 *.log
-'@ | Set-Content -Encoding utf8 .gitignore
