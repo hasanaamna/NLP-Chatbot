@@ -1,66 +1,84 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  Bot, Send, Trash2, UserRound, Sparkles, Wifi, WifiOff,
+  Bot, Send, Plus, UserRound, Sparkles, Wifi, WifiOff,
+  RotateCcw, Copy, Check,
 } from "lucide-react";
 import "./App.css";
 
 type Message = {
-  id: number;
-  role: "bot" | "user";
+  id: string;
+  role: "assistant" | "user";
   text: string;
+};
+
+type ChatResponse = {
+  conversation_id: string;
+  response: string;
+  model?: string;
+  detail?: string;
 };
 
 const API_URL = "http://127.0.0.1:8000";
 
 const suggestions = [
-  "Hello!",
-  "What can you do?",
-  "Who are you?",
-  "Thank you",
+  { title: "Explain a concept", prompt: "Explain artificial intelligence in simple words.", icon: "✦" },
+  { title: "Help with code", prompt: "Help me write a Python function to check if a number is prime.", icon: "</>" },
+  { title: "Learn something", prompt: "Teach me the basics of machine learning with an example.", icon: "↗" },
+  { title: "Improve my writing", prompt: "Give me tips to make my writing clearer and more professional.", icon: "✎" },
 ];
 
+const initialMessage: Message = {
+  id: "welcome",
+  role: "assistant",
+  text: "Hi! I'm your AI assistant, powered by Groq. Ask me questions, explore ideas, learn something new, or get help with code. What can we work on?",
+};
+
 export default function App() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 1,
-      role: "bot",
-      text: "Hi! I'm your NLP Chatbot. Ask me something, and I'll do my best to help.",
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([initialMessage]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [modelName, setModelName] = useState("Groq AI");
+  const [error, setError] = useState("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    let mounted = true;
+
     async function checkHealth() {
       try {
         const response = await fetch(`${API_URL}/health`);
-        setConnected(response.ok);
+        if (mounted) setConnected(response.ok);
       } catch {
-        setConnected(false);
+        if (mounted) setConnected(false);
       }
     }
 
     void checkHealth();
     const interval = window.setInterval(() => void checkHealth(), 10000);
-    return () => window.clearInterval(interval);
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, loading]);
 
   async function sendMessage(event?: FormEvent, suggestedText?: string) {
     event?.preventDefault();
     const text = (suggestedText ?? input).trim();
-
     if (!text || loading) return;
 
+    setError("");
     setMessages((current) => [
       ...current,
-      { id: Date.now(), role: "user", text },
+      { id: crypto.randomUUID(), role: "user", text },
     ]);
     setInput("");
     setLoading(true);
@@ -69,136 +87,220 @@ export default function App() {
       const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({
+          message: text,
+          ...(conversationId ? { conversation_id: conversationId } : {}),
+        }),
       });
 
+      const data = (await response.json().catch(() => ({}))) as Partial<ChatResponse>;
+
       if (!response.ok) {
-        throw new Error(`Server returned HTTP ${response.status}`);
+        throw new Error(
+          typeof data.detail === "string"
+            ? data.detail
+            : `The server returned HTTP ${response.status}.`,
+        );
       }
 
-      const data: { response: string; intent?: string } =
-        await response.json();
+      if (!data.response || !data.conversation_id) {
+        throw new Error("The server returned an incomplete response. Please try again.");
+      }
 
+      setConversationId(data.conversation_id);
+      if (data.model) setModelName(data.model);
       setMessages((current) => [
         ...current,
-        {
-          id: Date.now() + 1,
-          role: "bot",
-          text: data.response,
-        },
+        { id: crypto.randomUUID(), role: "assistant", text: data.response as string },
       ]);
       setConnected(true);
-    } catch {
-      setConnected(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Something went wrong.";
+      setError(message);
       setMessages((current) => [
         ...current,
         {
-          id: Date.now() + 1,
-          role: "bot",
-          text: "I couldn't reach the chatbot server. Please start the FastAPI backend at http://127.0.0.1:8000 and try again.",
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: `I couldn't complete that request. ${message}`,
         },
       ]);
+      if (message.includes("fetch") || message.includes("NetworkError")) {
+        setConnected(false);
+      }
     } finally {
       setLoading(false);
+      window.setTimeout(() => inputRef.current?.focus(), 0);
     }
   }
 
-  function clearChat() {
-    setMessages([
-      {
-        id: Date.now(),
-        role: "bot",
-        text: "Chat cleared! What would you like to talk about?",
-      },
-    ]);
+  function newConversation() {
+    setConversationId(null);
+    setMessages([{
+      ...initialMessage,
+      id: crypto.randomUUID(),
+      text: "New conversation started. What would you like to explore?",
+    }]);
+    setInput("");
+    setError("");
+    setCopiedId(null);
+    inputRef.current?.focus();
+  }
+
+  async function copyMessage(message: Message) {
+    try {
+      await navigator.clipboard.writeText(message.text);
+      setCopiedId(message.id);
+      window.setTimeout(() => setCopiedId(null), 1600);
+    } catch {
+      setError("Clipboard access isn't available in this browser.");
+    }
   }
 
   return (
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-icon"><Bot size={25} /></div>
-          <div>
-            <h1>NLP Chatbot</h1>
-            <p>Machine learning assistant</p>
+          <div className="brand-icon"><Sparkles size={23} /></div>
+          <div className="brand-copy">
+            <h1>AI Assistant</h1>
+            <p>Your AI thinking partner</p>
           </div>
         </div>
 
-        <button className="new-chat" onClick={clearChat}>
-          <Sparkles size={17} /> New conversation
+        <button className="new-chat" onClick={newConversation} disabled={loading}>
+          <Plus size={18} /><span>New conversation</span>
         </button>
 
         <div className="sidebar-section">
-          <span className="section-label">TRY ASKING</span>
+          <span className="section-label">START WITH AN IDEA</span>
           {suggestions.map((suggestion) => (
             <button
               className="suggestion"
-              key={suggestion}
-              onClick={() => void sendMessage(undefined, suggestion)}
+              key={suggestion.title}
+              onClick={() => void sendMessage(undefined, suggestion.prompt)}
               disabled={loading}
+              title={suggestion.prompt}
             >
-              <span className="suggestion-dot" />
-              {suggestion}
+              <span className="suggestion-icon">{suggestion.icon}</span>
+              <span>{suggestion.title}</span>
             </button>
           ))}
         </div>
+
+        <div className="sidebar-spacer" />
 
         <div className="sidebar-footer">
           <div className="status-indicator">
             {connected ? <Wifi size={16} /> : <WifiOff size={16} />}
             <span>{connected ? "Backend connected" : "Backend disconnected"}</span>
+            <span className={`status-dot ${connected ? "active" : ""}`} />
           </div>
-          <p>Powered by TF-IDF &amp; Logistic Regression</p>
+          <div className="provider-card">
+            <span className="provider-mark"><Sparkles size={14} /></span>
+            <div>
+              <strong>{modelName}</strong>
+              <p>AI response engine</p>
+            </div>
+          </div>
+          <p className="privacy-note">
+            Conversation context stays in memory while the backend is running.
+          </p>
         </div>
       </aside>
 
       <section className="chat-panel">
         <header className="topbar">
           <div className="assistant-profile">
-            <div className="avatar"><Bot size={22} /></div>
+            <div className="avatar"><Bot size={21} /></div>
             <div>
-              <h2>Your AI Assistant</h2>
+              <h2>AI Assistant</h2>
               <p>
                 <span className={`online-dot ${connected ? "active" : ""}`} />
-                {connected ? "Online and ready" : "Waiting for backend"}
+                {connected ? "Ready when you are" : "Waiting for backend"}
               </p>
             </div>
           </div>
-          <button className="clear-button" onClick={clearChat} title="Clear chat">
-            <Trash2 size={17} /><span>Clear chat</span>
-          </button>
+          <div className="topbar-actions">
+            <span className="model-pill"><span /> Groq-powered</span>
+            <button
+              className="clear-button"
+              onClick={newConversation}
+              disabled={loading}
+              title="Start a fresh conversation"
+            >
+              <RotateCcw size={16} /><span>New chat</span>
+            </button>
+          </div>
         </header>
 
         <div className="messages-area">
-          <div className="welcome-block">
-            <div className="welcome-icon"><Sparkles size={23} /></div>
-            <h2>A little conversation goes a long way.</h2>
-            <p>Ask a question or choose a suggestion to get started.</p>
-          </div>
+          {messages.length === 1 && messages[0].id === "welcome" && (
+            <div className="welcome-block">
+              <div className="welcome-orb"><Sparkles size={26} /></div>
+              <p className="eyebrow">A LITTLE HELP GOES A LONG WAY</p>
+              <h2>What’s on your mind?</h2>
+              <p className="welcome-subtitle">
+                Ask a question, explore an idea, or turn a challenge into a plan.
+              </p>
+              <div className="welcome-suggestions">
+                {suggestions.map((suggestion) => (
+                  <button
+                    key={suggestion.title}
+                    className="welcome-suggestion"
+                    onClick={() => void sendMessage(undefined, suggestion.prompt)}
+                    disabled={loading}
+                  >
+                    <span>{suggestion.icon}</span>
+                    <strong>{suggestion.title}</strong>
+                    <small>{suggestion.prompt}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="messages-list">
             {messages.map((message) => (
               <div className={`message-row ${message.role}`} key={message.id}>
-                <div className="message-avatar">
-                  {message.role === "bot"
-                    ? <Bot size={18} />
-                    : <UserRound size={18} />}
+                <div className={`message-avatar ${message.role}`}>
+                  {message.role === "assistant"
+                    ? <Sparkles size={17} />
+                    : <UserRound size={17} />}
                 </div>
                 <div className="message-content">
-                  <span className="message-author">
-                    {message.role === "bot" ? "NLP Assistant" : "You"}
-                  </span>
+                  <div className="message-meta">
+                    <span className="message-author">
+                      {message.role === "assistant" ? "AI Assistant" : "You"}
+                    </span>
+                    {message.role === "assistant" && message.id !== "welcome" && (
+                      <button
+                        className="copy-button"
+                        onClick={() => void copyMessage(message)}
+                        title="Copy response"
+                        aria-label="Copy response"
+                      >
+                        {copiedId === message.id ? <Check size={14} /> : <Copy size={14} />}
+                        <span>{copiedId === message.id ? "Copied" : "Copy"}</span>
+                      </button>
+                    )}
+                  </div>
                   <div className="message-bubble">{message.text}</div>
                 </div>
               </div>
             ))}
 
             {loading && (
-              <div className="message-row bot">
-                <div className="message-avatar"><Bot size={18} /></div>
+              <div className="message-row assistant">
+                <div className="message-avatar assistant"><Sparkles size={17} /></div>
                 <div className="message-content">
-                  <span className="message-author">NLP Assistant</span>
-                  <div className="message-bubble typing">Thinking...</div>
+                  <span className="message-author">Groq Assistant</span>
+                  <div className="message-bubble typing-bubble">
+                    <span className="typing-dot" />
+                    <span className="typing-dot" />
+                    <span className="typing-dot" />
+                    <span className="typing-label">Thinking through it...</span>
+                  </div>
                 </div>
               </div>
             )}
@@ -209,31 +311,37 @@ export default function App() {
         <div className="composer-wrap">
           {!connected && (
             <p className="connection-note">
-              Start your FastAPI backend to enable chat responses.
+              Start the FastAPI backend at <code>127.0.0.1:8000</code> to chat.
             </p>
           )}
-          <form
-            className="composer"
-            onSubmit={(event) => void sendMessage(event)}
-          >
+          {error && (
+            <div className="error-banner" role="alert">
+              <span>{error}</span>
+              <button onClick={() => setError("")} aria-label="Dismiss error">×</button>
+            </div>
+          )}
+          <form className="composer" onSubmit={(event) => void sendMessage(event)}>
             <input
+              ref={inputRef}
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Type your message here..."
+              placeholder="Message your AI assistant..."
               aria-label="Your message"
-              maxLength={2000}
+              maxLength={8000}
               disabled={loading}
             />
+            <span className="composer-divider" />
             <button
               type="submit"
               disabled={!input.trim() || loading}
               aria-label="Send message"
+              title="Send message"
             >
-              <Send size={18} />
+              <Send size={17} />
             </button>
           </form>
           <p className="composer-hint">
-            Enter to send · Your chatbot runs locally
+            AI can make mistakes. Check important information. <span>·</span> Enter to send
           </p>
         </div>
       </section>
