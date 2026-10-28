@@ -1,8 +1,18 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
-  Bot, Send, Plus, UserRound, Sparkles, Wifi, WifiOff,
-  RotateCcw, Copy, Check,
+  Bot,
+  Send,
+  Plus,
+  UserRound,
+  Sparkles,
+  Wifi,
+  WifiOff,
+  RotateCcw,
+  Copy,
+  Check,
 } from "lucide-react";
 import "./App.css";
 
@@ -22,17 +32,57 @@ type ChatResponse = {
 const API_URL = "http://127.0.0.1:8000";
 
 const suggestions = [
-  { title: "Explain a concept", prompt: "Explain artificial intelligence in simple words.", icon: "✦" },
-  { title: "Help with code", prompt: "Help me write a Python function to check if a number is prime.", icon: "</>" },
-  { title: "Learn something", prompt: "Teach me the basics of machine learning with an example.", icon: "↗" },
-  { title: "Improve my writing", prompt: "Give me tips to make my writing clearer and more professional.", icon: "✎" },
+  {
+    title: "Explain a concept",
+    prompt: "Explain artificial intelligence in simple words.",
+    icon: "✦",
+  },
+  {
+    title: "Help with code",
+    prompt: "Help me write a Python function to check if a number is prime.",
+    icon: "</>",
+  },
+  {
+    title: "Learn something",
+    prompt: "Teach me the basics of machine learning with an example.",
+    icon: "↗",
+  },
+  {
+    title: "Improve my writing",
+    prompt: "Give me tips to make my writing clearer and more professional.",
+    icon: "✎",
+  },
 ];
 
 const initialMessage: Message = {
   id: "welcome",
   role: "assistant",
-  text: "Hi! I'm your AI assistant, powered by Groq. Ask me questions, explore ideas, learn something new, or get help with code. What can we work on?",
+  text: "Hi! I'm your AI assistant. Ask me a question, explore an idea, or work through a problem with me. What would you like to talk about?",
 };
+
+function MarkdownMessage({ text }: { text: string }) {
+  return (
+    <div className="markdown-content">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ href, children, ...props }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              {...props}
+            >
+              {children}
+            </a>
+          ),
+        }}
+      >
+        {text}
+      </ReactMarkdown>
+    </div>
+  );
+}
 
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([initialMessage]);
@@ -43,6 +93,7 @@ export default function App() {
   const [modelName, setModelName] = useState("Groq AI");
   const [error, setError] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -59,7 +110,11 @@ export default function App() {
     }
 
     void checkHealth();
-    const interval = window.setInterval(() => void checkHealth(), 10000);
+
+    const interval = window.setInterval(() => {
+      void checkHealth();
+    }, 10000);
+
     return () => {
       mounted = false;
       window.clearInterval(interval);
@@ -67,33 +122,52 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    bottomRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
   }, [messages, loading]);
 
-  async function sendMessage(event?: FormEvent, suggestedText?: string) {
+  async function sendMessage(
+    event?: FormEvent,
+    suggestedText?: string,
+  ) {
     event?.preventDefault();
+
     const text = (suggestedText ?? input).trim();
+
     if (!text || loading) return;
 
     setError("");
+
     setMessages((current) => [
       ...current,
-      { id: crypto.randomUUID(), role: "user", text },
+      {
+        id: crypto.randomUUID(),
+        role: "user",
+        text,
+      },
     ]);
+
     setInput("");
     setLoading(true);
 
     try {
       const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           message: text,
-          ...(conversationId ? { conversation_id: conversationId } : {}),
+          ...(conversationId
+            ? { conversation_id: conversationId }
+            : {}),
         }),
       });
 
-      const data = (await response.json().catch(() => ({}))) as Partial<ChatResponse>;
+      const data = (await response.json().catch(() => ({}))) as
+        Partial<ChatResponse>;
 
       if (!response.ok) {
         throw new Error(
@@ -104,28 +178,50 @@ export default function App() {
       }
 
       if (!data.response || !data.conversation_id) {
-        throw new Error("The server returned an incomplete response. Please try again.");
+        throw new Error(
+          "The server returned an incomplete response. Please try again.",
+        );
       }
 
       setConversationId(data.conversation_id);
-      if (data.model) setModelName(data.model);
-      setMessages((current) => [
-        ...current,
-        { id: crypto.randomUUID(), role: "assistant", text: data.response as string },
-      ]);
-      setConnected(true);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Something went wrong.";
-      setError(message);
+
+      if (data.model) {
+        setModelName(data.model);
+      }
+
       setMessages((current) => [
         ...current,
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          text: `I couldn't complete that request. ${message}`,
+          text: data.response as string,
         },
       ]);
-      if (message.includes("fetch") || message.includes("NetworkError")) {
+
+      setConnected(true);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Something went wrong.";
+
+      setError(message);
+
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text:
+            `I couldn't complete that request.\n\n${message}\n\n` +
+            "Please check that the backend is running and try again.",
+        },
+      ]);
+
+      if (
+        message.toLowerCase().includes("fetch") ||
+        message.toLowerCase().includes("networkerror")
+      ) {
         setConnected(false);
       }
     } finally {
@@ -136,11 +232,15 @@ export default function App() {
 
   function newConversation() {
     setConversationId(null);
-    setMessages([{
-      ...initialMessage,
-      id: crypto.randomUUID(),
-      text: "New conversation started. What would you like to explore?",
-    }]);
+
+    setMessages([
+      {
+        ...initialMessage,
+        id: crypto.randomUUID(),
+        text: "New conversation started. What would you like to explore?",
+      },
+    ]);
+
     setInput("");
     setError("");
     setCopiedId(null);
@@ -161,19 +261,27 @@ export default function App() {
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-icon"><Sparkles size={23} /></div>
+          <div className="brand-icon">
+            <Sparkles size={23} />
+          </div>
           <div className="brand-copy">
             <h1>AI Assistant</h1>
             <p>Your AI thinking partner</p>
           </div>
         </div>
 
-        <button className="new-chat" onClick={newConversation} disabled={loading}>
-          <Plus size={18} /><span>New conversation</span>
+        <button
+          className="new-chat"
+          onClick={newConversation}
+          disabled={loading}
+        >
+          <Plus size={18} />
+          <span>New conversation</span>
         </button>
 
         <div className="sidebar-section">
           <span className="section-label">START WITH AN IDEA</span>
+
           {suggestions.map((suggestion) => (
             <button
               className="suggestion"
@@ -193,16 +301,22 @@ export default function App() {
         <div className="sidebar-footer">
           <div className="status-indicator">
             {connected ? <Wifi size={16} /> : <WifiOff size={16} />}
-            <span>{connected ? "Backend connected" : "Backend disconnected"}</span>
+            <span>
+              {connected ? "Backend connected" : "Backend disconnected"}
+            </span>
             <span className={`status-dot ${connected ? "active" : ""}`} />
           </div>
+
           <div className="provider-card">
-            <span className="provider-mark"><Sparkles size={14} /></span>
+            <span className="provider-mark">
+              <Sparkles size={14} />
+            </span>
             <div>
               <strong>{modelName}</strong>
               <p>AI response engine</p>
             </div>
           </div>
+
           <p className="privacy-note">
             Conversation context stays in memory while the backend is running.
           </p>
@@ -212,24 +326,34 @@ export default function App() {
       <section className="chat-panel">
         <header className="topbar">
           <div className="assistant-profile">
-            <div className="avatar"><Bot size={21} /></div>
+            <div className="avatar">
+              <Bot size={21} />
+            </div>
             <div>
               <h2>AI Assistant</h2>
               <p>
-                <span className={`online-dot ${connected ? "active" : ""}`} />
+                <span
+                  className={`online-dot ${connected ? "active" : ""}`}
+                />
                 {connected ? "Ready when you are" : "Waiting for backend"}
               </p>
             </div>
           </div>
+
           <div className="topbar-actions">
-            <span className="model-pill"><span /> Groq-powered</span>
+            <span className="model-pill">
+              <span />
+              Groq-powered
+            </span>
+
             <button
               className="clear-button"
               onClick={newConversation}
               disabled={loading}
               title="Start a fresh conversation"
             >
-              <RotateCcw size={16} /><span>New chat</span>
+              <RotateCcw size={16} />
+              <span>New chat</span>
             </button>
           </div>
         </header>
@@ -237,12 +361,17 @@ export default function App() {
         <div className="messages-area">
           {messages.length === 1 && messages[0].id === "welcome" && (
             <div className="welcome-block">
-              <div className="welcome-orb"><Sparkles size={26} /></div>
+              <div className="welcome-orb">
+                <Sparkles size={26} />
+              </div>
+
               <p className="eyebrow">A LITTLE HELP GOES A LONG WAY</p>
               <h2>What’s on your mind?</h2>
+
               <p className="welcome-subtitle">
                 Ask a question, explore an idea, or turn a challenge into a plan.
               </p>
+
               <div className="welcome-suggestions">
                 {suggestions.map((suggestion) => (
                   <button
@@ -262,48 +391,70 @@ export default function App() {
 
           <div className="messages-list">
             {messages.map((message) => (
-              <div className={`message-row ${message.role}`} key={message.id}>
+              <div
+                className={`message-row ${message.role}`}
+                key={message.id}
+              >
                 <div className={`message-avatar ${message.role}`}>
                   {message.role === "assistant"
                     ? <Sparkles size={17} />
                     : <UserRound size={17} />}
                 </div>
+
                 <div className="message-content">
                   <div className="message-meta">
                     <span className="message-author">
                       {message.role === "assistant" ? "AI Assistant" : "You"}
                     </span>
-                    {message.role === "assistant" && message.id !== "welcome" && (
-                      <button
-                        className="copy-button"
-                        onClick={() => void copyMessage(message)}
-                        title="Copy response"
-                        aria-label="Copy response"
-                      >
-                        {copiedId === message.id ? <Check size={14} /> : <Copy size={14} />}
-                        <span>{copiedId === message.id ? "Copied" : "Copy"}</span>
-                      </button>
+
+                    {message.role === "assistant" &&
+                      message.id !== "welcome" && (
+                        <button
+                          className="copy-button"
+                          onClick={() => void copyMessage(message)}
+                          title="Copy response"
+                          aria-label="Copy response"
+                        >
+                          {copiedId === message.id
+                            ? <Check size={14} />
+                            : <Copy size={14} />}
+                          <span>
+                            {copiedId === message.id ? "Copied" : "Copy"}
+                          </span>
+                        </button>
+                      )}
+                  </div>
+
+                  <div className="message-bubble">
+                    {message.role === "assistant" ? (
+                      <MarkdownMessage text={message.text} />
+                    ) : (
+                      <div className="user-message-text">{message.text}</div>
                     )}
                   </div>
-                  <div className="message-bubble">{message.text}</div>
                 </div>
               </div>
             ))}
 
             {loading && (
               <div className="message-row assistant">
-                <div className="message-avatar assistant"><Sparkles size={17} /></div>
+                <div className="message-avatar assistant">
+                  <Sparkles size={17} />
+                </div>
+
                 <div className="message-content">
-                  <span className="message-author">Groq Assistant</span>
+                  <span className="message-author">AI Assistant</span>
+
                   <div className="message-bubble typing-bubble">
                     <span className="typing-dot" />
                     <span className="typing-dot" />
                     <span className="typing-dot" />
-                    <span className="typing-label">Thinking through it...</span>
+                    <span className="typing-label">Thinking...</span>
                   </div>
                 </div>
               </div>
             )}
+
             <div ref={bottomRef} />
           </div>
         </div>
@@ -314,13 +465,23 @@ export default function App() {
               Start the FastAPI backend at <code>127.0.0.1:8000</code> to chat.
             </p>
           )}
+
           {error && (
             <div className="error-banner" role="alert">
               <span>{error}</span>
-              <button onClick={() => setError("")} aria-label="Dismiss error">×</button>
+              <button
+                onClick={() => setError("")}
+                aria-label="Dismiss error"
+              >
+                ×
+              </button>
             </div>
           )}
-          <form className="composer" onSubmit={(event) => void sendMessage(event)}>
+
+          <form
+            className="composer"
+            onSubmit={(event) => void sendMessage(event)}
+          >
             <input
               ref={inputRef}
               value={input}
@@ -330,7 +491,9 @@ export default function App() {
               maxLength={8000}
               disabled={loading}
             />
+
             <span className="composer-divider" />
+
             <button
               type="submit"
               disabled={!input.trim() || loading}
@@ -340,8 +503,11 @@ export default function App() {
               <Send size={17} />
             </button>
           </form>
+
           <p className="composer-hint">
-            AI can make mistakes. Check important information. <span>·</span> Enter to send
+            AI can make mistakes. Check important information.
+            <span> · </span>
+            Enter to send
           </p>
         </div>
       </section>
