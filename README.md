@@ -1,386 +1,278 @@
-# \# NLP Chatbot
+# NLP Chatbot — AI-Powered Conversational Assistant
+
+An AI-powered chatbot built with **Python, FastAPI, React, TypeScript, and the Groq API**. The application provides a modern chat interface for asking questions and receiving natural-language responses from a large language model.
+
+The project combines a Python backend with a responsive frontend, conversation context, Markdown-formatted responses, and optional web-search capabilities where supported by the configured model and API.
+
+## Features
+
+- **AI-powered conversations:** Generate natural-language responses using a Groq-hosted language model.
+- **Modern chat interface:** React and TypeScript frontend with a clean, responsive layout.
+- **Conversation context:** Include recent conversation messages to help maintain continuity between questions.
+- **Markdown rendering:** Display formatted text, lists, code blocks, and tables in assistant responses.
+- **Web-search integration:** Support web search through the configured model/API tool when available and enabled.
+- **FastAPI backend:** Expose REST endpoints for health checks and chat requests.
+- **Environment-based configuration:** Store API credentials and model settings in environment variables.
+- **Error handling:** Handle API failures, network errors, and usage-limit responses.
+- **Reduced unnecessary token usage:** Limit conversation history and response length to help manage API consumption.
+- **Developer-friendly setup:** Run the frontend and backend locally during development.
+
+## Technology Stack
+
+| Component | Technology |
+|---|---|
+| Frontend | React, TypeScript, Vite |
+| UI styling | CSS |
+| Markdown rendering | React Markdown, remark-gfm |
+| Icons | Lucide React |
+| Backend | Python, FastAPI |
+| ASGI server | Uvicorn |
+| AI provider | Groq API |
+| Language model | `openai/gpt-oss-20b` |
+| Configuration | python-dotenv |
+| API validation | Pydantic |
+| Testing | pytest, HTTPX |
 
-# 
+## Project Structure
 
-# A full-stack Natural Language Processing (NLP) chatbot built with Python, scikit-learn, FastAPI, React, and TypeScript. The application classifies user intent using a TF-IDF vectorizer and Logistic Regression model, then returns an appropriate response.
+```text
+NLP-Chatbot/
+├── backend/
+│   └── main.py
+├── src/
+│   └── nlp/
+│       ├── ai_assistant.py
+│       ├── chatbot.py
+│       └── train.py
+├── data/
+│   └── intents.json
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx
+│   │   ├── App.css
+│   │   ├── index.css
+│   │   └── main.tsx
+│   ├── package.json
+│   └── index.html
+├── tests/
+│   ├── test_api.py
+│   └── test_chatbot.py
+├── .env
+├── .gitignore
+├── requirements.txt
+└── README.md
+```
 
-# 
+*Note: This structure represents the main project components. Keep only the files and folders that exist in your current repository.*
 
-# \## Features
+## Prerequisites
 
-# 
+Install the following before starting:
 
-# \- \*\*Intent classification:\*\* TF-IDF features and Logistic Regression.
+- Python 3.11 or another Python version supported by your installed dependencies
+- Node.js and npm
+- A Groq API key
+- Git (optional, for version control)
 
-# \- \*\*Response generation:\*\* Intent-based responses configured in JSON.
+## Installation and Setup
 
-# \- \*\*Phrase matching:\*\* Handles known phrases reliably.
+### 1. Clone the repository
 
-# \- \*\*Fallback handling:\*\* Responds to unfamiliar or low-confidence messages.
+If the project is already on your computer, skip this step.
 
-# \- \*\*REST API:\*\* FastAPI endpoints for health checks and chat.
+```bash
+git clone https://github.com/hasanaamna/NLP-Chatbot
+cd NLP-Chatbot
+```
 
-# \- \*\*Interactive interface:\*\* React and TypeScript chat UI.
+### 2. Create and activate a Python virtual environment
 
-# \- \*\*Automated tests:\*\* Python tests for chatbot behavior and API validation.
+**Windows CMD:**
 
-# \- \*\*Local execution:\*\* Run the frontend and backend on your own machine.
+```cmd
+cd /d C:\future\NLP-Chatbot
 
-# 
+python -m venv venv
+venv\Scripts\activate
+```
 
-# \## Technology Stack
+### 3. Install backend dependencies
 
-# 
+```cmd
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
 
-# | Component | Technologies |
+### 4. Configure environment variables
 
-# |---|---|
+Create a `.env` file in the project root:
 
-# | NLP and machine learning | Python, scikit-learn, pandas |
+```env
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=openai/gpt-oss-20b
+```
 
-# | Backend | FastAPI, Uvicorn, Pydantic |
+Replace the placeholder with your own API key from the Groq Console.
 
-# | Frontend | React, TypeScript, Vite, CSS |
+**Security:** Never commit your real API key to GitHub. Keep `.env` in `.gitignore` and provide a `.env.example` containing placeholders if you want to document the required configuration.
 
-# | Model features | TF-IDF |
+### 5. Start the FastAPI backend
 
-# | Classifier | Logistic Regression |
+From the project root, with the virtual environment activated:
 
-# | Testing | pytest, FastAPI TestClient |
+```cmd
+python -m uvicorn backend.main:app --reload
+```
 
-# | Data format | JSON |
+The backend should be available at:
 
-# 
+- API base URL: `http://127.0.0.1:8000`
+- Interactive API documentation: `http://127.0.0.1:8000/docs`
+- Health check: `http://127.0.0.1:8000/health`
 
-# \## Project Structure
+Keep this terminal open while using the application.
 
-# 
+### 6. Install frontend dependencies
 
-# ```text
+Open a **second CMD window**:
 
-# NLP-Chatbot/
+```cmd
+cd /d C:\future\NLP-Chatbot\frontend
+npm install
+```
 
-# ├── backend/
+### 7. Start the frontend
 
-# │   └── main.py
+```cmd
+npm run dev
+```
 
-# ├── data/
+Open the local URL printed by Vite, usually:
 
-# │   └── intents.json
+`http://localhost:5173`
 
-# ├── frontend/
+You should now be able to interact with the chatbot through the browser.
 
-# │   ├── src/
+## API Endpoints
 
-# │   ├── index.html
+### Health Check
 
-# │   ├── package.json
+**Endpoint:** `GET /health`
 
-# │   └── vite.config.ts
+Checks whether the backend is running.
 
-# ├── models/
+Example:
 
-# ├── src/
+```bash
+curl http://127.0.0.1:8000/health
+```
 
-# │   └── nlp/
+### Chat
 
-# │       ├── chatbot.py
+**Endpoint:** `POST /chat`
 
-# │       └── train.py
+Accepts a user message and returns an AI-generated response.
 
-# ├── tests/
+Example request:
 
-# │   ├── test\_api.py
+```json
+{
+  "message": "Explain natural language processing in simple terms."
+}
+```
 
-# │   └── test\_chatbot.py
+The response structure depends on the current implementation of `backend/main.py`. The frontend expects a response containing the assistant's text.
 
-# ├── .gitignore
+## How It Works
 
-# └── README.md
+1. The user enters a message in the React chat interface.
+2. The frontend sends the message to the FastAPI backend.
+3. The backend passes the request to the AI assistant.
+4. The assistant prepares the request using its configured model, system instructions, and permitted conversation context.
+5. The Groq API generates a response.
+6. The backend returns the response to the frontend.
+7. React renders the answer, including supported Markdown formatting.
 
-# ```
+When web search is configured and used, the assistant can incorporate retrieved information into its response. Availability and results depend on the configured API features and model support.
 
-# 
+## Managing API Usage and Rate Limits
 
-# \## Requirements
+The chatbot depends on the usage limits associated with your Groq account, model, and organization or project.
 
-# 
+HTTP `429` errors may occur when a request or token limit is reached.
 
-# \- Python 3.11 or a compatible Python version
+To help reduce unnecessary API usage:
 
-# \- Node.js and npm
+- Keep only the recent conversation messages needed for context.
+- Set a reasonable maximum completion-token limit.
+- Use web search only when the question requires current or external information.
+- Avoid automatically retrying rate-limited requests repeatedly.
+- Check the Groq Console for the applicable limit and reset time.
 
-# \- Git
+These measures can reduce unnecessary requests and token consumption, but **they cannot bypass provider-enforced limits**. If a quota is exhausted, wait for its reset or use an available plan or model within its permitted limits.
 
-# 
+## Error Handling
 
-# \## Installation
+The application should handle common problems, including:
 
-# 
+| Error | What to check |
+|---|---|
+| Backend connection failure | Confirm that Uvicorn is running. |
+| Missing API key | Check the `.env` file and environment-variable loading. |
+| HTTP 429 | Check Groq usage limits and reset information. |
+| API authentication error | Verify the API key without sharing it publicly. |
+| Model or API error | Check the configured model and provider availability. |
+| Frontend request failure | Confirm the backend URL and CORS configuration. |
 
-# \### 1. Clone the repository
+## Testing
 
-# 
+Run backend tests from the project root:
 
-# ```bash
+```cmd
+python -m pytest -v
+```
 
-# git clone <YOUR\_GITHUB\_REPOSITORY\_URL>
+Build the frontend to check for TypeScript and production-build errors:
 
-# cd NLP-Chatbot
+```cmd
+cd /d C:\future\NLP-Chatbot\frontend
+npm run build
+```
 
-# ```
+A successful build does not by itself verify live Groq API access. Test the chat endpoint separately when the provider's usage limits permit requests.
 
-# 
+## Security
 
-# Replace the placeholder with your actual GitHub repository URL.
+- Keep API keys in environment variables.
+- Do not commit `.env`, virtual environments, or dependency folders.
+- Do not print secrets in application logs.
+- Avoid exposing raw provider errors or credentials to frontend users.
+- Configure CORS for the frontend origins you actually use.
+- Treat model-generated responses as potentially inaccurate and verify important information.
 
-# 
+## Current Limitations
 
-# \### 2. Create and activate a Python environment
+- Responses depend on the configured language model and external API availability.
+- Usage quotas and rate limits are controlled by the AI provider.
+- Web-search functionality depends on API and model support.
+- Conversation context is limited by the application's configured history and token settings.
+- Persistent conversation storage should not be assumed unless it is implemented separately.
 
-# 
+## Future Improvements
 
-# Windows CMD:
+- Add persistent conversation history.
+- Support multiple conversations and conversation titles.
+- Add configurable model selection.
+- Improve rate-limit feedback and request throttling.
+- Add automated backend and frontend tests.
+- Introduce document-based question answering with Retrieval-Augmented Generation (RAG).
+- Add authentication and user-specific chat sessions.
+- Deploy the frontend and backend to production hosting.
 
-# 
+## License
 
-# ```cmd
+Choose and add an appropriate open-source license before distributing the project publicly. No license is implied by this README.
 
-# python -m venv venv
+---
 
-# venv\\Scripts\\activate.bat
-
-# ```
-
-# 
-
-# \### 3. Install Python dependencies
-
-# 
-
-# Install the project's required Python packages. If a `requirements.txt` file is available:
-
-# 
-
-# ```cmd
-
-# python -m pip install -r requirements.txt
-
-# ```
-
-# 
-
-# If it is not available, create one containing the project's required backend and testing dependencies before following this step.
-
-# 
-
-# \### 4. Install frontend dependencies
-
-# 
-
-# ```cmd
-
-# cd frontend
-
-# npm install
-
-# cd ..
-
-# ```
-
-# 
-
-# \## Model Training
-
-# 
-
-# Train the intent classifier from the project root:
-
-# 
-
-# ```cmd
-
-# python -m src.nlp.train
-
-# ```
-
-# 
-
-# The training script reads the configured intent data, trains and evaluates the classifier, and saves the trained model if the training completes successfully.
-
-# 
-
-# Ensure the trained model is available locally before starting the chatbot. Follow the paths configured by the training and chatbot scripts.
-
-# 
-
-# \## Running the Application
-
-# 
-
-# Run the backend and frontend in separate terminals.
-
-# 
-
-# \### Terminal 1: Backend
-
-# 
-
-# From the project root, activate the virtual environment and start FastAPI:
-
-# 
-
-# ```cmd
-
-# venv\\Scripts\\activate.bat
-
-# python -m uvicorn backend.main:app --reload
-
-# ```
-
-# 
-
-# Backend URL: `http://127.0.0.1:8000`
-
-# 
-
-# Interactive API documentation: `http://127.0.0.1:8000/docs`
-
-# 
-
-# Health endpoint: `http://127.0.0.1:8000/health`
-
-# 
-
-# \### Terminal 2: Frontend
-
-# 
-
-# ```cmd
-
-# cd frontend
-
-# npm run dev
-
-# ```
-
-# 
-
-# Open the local URL printed by Vite, normally `http://127.0.0.1:5173`.
-
-# 
-
-# \## API Endpoints
-
-# 
-
-# | Method | Endpoint | Purpose |
-
-# |---|---|---|
-
-# | GET | `/` | API information |
-
-# | GET | `/health` | Backend health check |
-
-# | POST | `/chat` | Submit a message and receive a chatbot response |
-
-# 
-
-# Example request:
-
-# 
-
-# ```json
-
-# {
-
-# &#x20; "message": "Hello!"
-
-# }
-
-# ```
-
-# 
-
-# The chat endpoint returns the response and intent-related information defined by the backend response schema.
-
-# 
-
-# \## Testing
-
-# 
-
-# Run the Python tests from the project root:
-
-# 
-
-# ```cmd
-
-# python -m pytest -v
-
-# ```
-
-# 
-
-# The current test run completed with \*\*19 passed tests\*\* covering chatbot behavior and API endpoints.
-
-# 
-
-# Build the frontend for production:
-
-# 
-
-# ```cmd
-
-# cd frontend
-
-# npm run build
-
-# ```
-
-# 
-
-# The frontend production build has completed successfully.
-
-# 
-
-# \## Current Limitations
-
-# 
-
-# \- The chatbot is based on a predefined set of intents and responses.
-
-# \- It is not a general-purpose generative AI model.
-
-# \- Response quality depends on the training examples, intent configuration, and confidence threshold.
-
-# \- A production deployment would require additional security, monitoring, configuration, and deployment work.
-
-# 
-
-# \## Future Improvements
-
-# 
-
-# \- Expand and balance the intent dataset.
-
-# \- Evaluate per-intent precision, recall, and F1 score.
-
-# \- Improve confidence calibration and fallback behavior.
-
-# \- Add conversation persistence if needed.
-
-# \- Add more API and frontend integration tests.
-
-# \- Deploy the application with appropriate security and monitoring.
-
-# 
-
-# \## License
-
-# 
-
-# Add a license file if you intend to distribute this project publicly.
-
-
-
+**Built with Python, FastAPI, React, TypeScript, and Groq.**
