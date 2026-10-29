@@ -108,9 +108,16 @@ def chat(request: ChatRequest):
         raise HTTPException(status_code=status_code, detail=message) from exc
 
     except RateLimitError as exc:
+        logger.warning("Groq rate limit reached: %s", exc)
+
         raise HTTPException(
             status_code=429,
-            detail="The AI service is rate-limited. Please try again shortly.",
+            detail=(
+                "The AI service has reached its usage limit. "
+                "Please wait a little and try again. "
+                "If this continues, check your Groq Console usage limits."
+            ),
+            headers={"Retry-After": "30"},
         ) from exc
 
     except APIConnectionError as exc:

@@ -97,15 +97,21 @@ export default function App() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Check whether the FastAPI backend is available.
   useEffect(() => {
     let mounted = true;
 
     async function checkHealth() {
       try {
         const response = await fetch(`${API_URL}/health`);
-        if (mounted) setConnected(response.ok);
+
+        if (mounted) {
+          setConnected(response.ok);
+        }
       } catch {
-        if (mounted) setConnected(false);
+        if (mounted) {
+          setConnected(false);
+        }
       }
     }
 
@@ -121,6 +127,7 @@ export default function App() {
     };
   }, []);
 
+  // Scroll to the latest message when the conversation changes.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
       behavior: "smooth",
@@ -128,6 +135,7 @@ export default function App() {
     });
   }, [messages, loading]);
 
+  // Send a message to the FastAPI backend.
   async function sendMessage(
     event?: FormEvent,
     suggestedText?: string,
@@ -136,20 +144,20 @@ export default function App() {
 
     const text = (suggestedText ?? input).trim();
 
-    if (!text || loading) return;
+    if (!text || loading) {
+      return;
+    }
 
     setError("");
-
-    setMessages((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        role: "user",
-        text,
-      },
-    ]);
-
     setInput("");
+
+    const userMessage: Message = {
+      id: crypto.randomUUID(),
+      role: "user",
+      text,
+    };
+
+    setMessages((current) => [...current, userMessage]);
     setLoading(true);
 
     try {
@@ -170,11 +178,12 @@ export default function App() {
         Partial<ChatResponse>;
 
       if (!response.ok) {
-        throw new Error(
+        const errorMessage =
           typeof data.detail === "string"
             ? data.detail
-            : `The server returned HTTP ${response.status}.`,
-        );
+            : `The server returned HTTP ${response.status}.`;
+
+        throw new Error(errorMessage);
       }
 
       if (!data.response || !data.conversation_id) {
@@ -189,34 +198,22 @@ export default function App() {
         setModelName(data.model);
       }
 
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          text: data.response as string,
-        },
-      ]);
+      const assistantMessage: Message = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        text: data.response,
+      };
 
+      setMessages((current) => [...current, assistantMessage]);
       setConnected(true);
     } catch (err) {
       const message =
         err instanceof Error
           ? err.message
-          : "Something went wrong.";
+          : "Something went wrong. Please try again.";
 
+      // Show errors only in the error banner, not as duplicate chat messages.
       setError(message);
-
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          text:
-            `I couldn't complete that request.\n\n${message}\n\n` +
-            "Please check that the backend is running and try again.",
-        },
-      ]);
 
       if (
         message.toLowerCase().includes("fetch") ||
@@ -226,11 +223,19 @@ export default function App() {
       }
     } finally {
       setLoading(false);
-      window.setTimeout(() => inputRef.current?.focus(), 0);
+
+      window.setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
     }
   }
 
+  // Start a fresh conversation.
   function newConversation() {
+    if (loading) {
+      return;
+    }
+
     setConversationId(null);
 
     setMessages([
@@ -244,14 +249,22 @@ export default function App() {
     setInput("");
     setError("");
     setCopiedId(null);
+
     inputRef.current?.focus();
   }
 
+  // Copy an assistant response.
   async function copyMessage(message: Message) {
     try {
       await navigator.clipboard.writeText(message.text);
+
       setCopiedId(message.id);
-      window.setTimeout(() => setCopiedId(null), 1600);
+
+      window.setTimeout(() => {
+        setCopiedId((current) =>
+          current === message.id ? null : current,
+        );
+      }, 1600);
     } catch {
       setError("Clipboard access isn't available in this browser.");
     }
@@ -259,11 +272,13 @@ export default function App() {
 
   return (
     <main className="app-shell">
+      {/* Sidebar */}
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-icon">
             <Sparkles size={23} />
           </div>
+
           <div className="brand-copy">
             <h1>AI Assistant</h1>
             <p>Your AI thinking partner</p>
@@ -286,11 +301,15 @@ export default function App() {
             <button
               className="suggestion"
               key={suggestion.title}
-              onClick={() => void sendMessage(undefined, suggestion.prompt)}
+              onClick={() =>
+                void sendMessage(undefined, suggestion.prompt)
+              }
               disabled={loading}
               title={suggestion.prompt}
             >
-              <span className="suggestion-icon">{suggestion.icon}</span>
+              <span className="suggestion-icon">
+                {suggestion.icon}
+              </span>
               <span>{suggestion.title}</span>
             </button>
           ))}
@@ -300,17 +319,28 @@ export default function App() {
 
         <div className="sidebar-footer">
           <div className="status-indicator">
-            {connected ? <Wifi size={16} /> : <WifiOff size={16} />}
+            {connected ? (
+              <Wifi size={16} />
+            ) : (
+              <WifiOff size={16} />
+            )}
+
             <span>
-              {connected ? "Backend connected" : "Backend disconnected"}
+              {connected
+                ? "Backend connected"
+                : "Backend disconnected"}
             </span>
-            <span className={`status-dot ${connected ? "active" : ""}`} />
+
+            <span
+              className={`status-dot ${connected ? "active" : ""}`}
+            />
           </div>
 
           <div className="provider-card">
             <span className="provider-mark">
               <Sparkles size={14} />
             </span>
+
             <div>
               <strong>{modelName}</strong>
               <p>AI response engine</p>
@@ -323,19 +353,24 @@ export default function App() {
         </div>
       </aside>
 
+      {/* Main chat panel */}
       <section className="chat-panel">
         <header className="topbar">
           <div className="assistant-profile">
             <div className="avatar">
               <Bot size={21} />
             </div>
+
             <div>
               <h2>AI Assistant</h2>
+
               <p>
                 <span
                   className={`online-dot ${connected ? "active" : ""}`}
                 />
-                {connected ? "Ready when you are" : "Waiting for backend"}
+                {connected
+                  ? "Ready when you are"
+                  : "Waiting for backend"}
               </p>
             </div>
           </div>
@@ -358,36 +393,43 @@ export default function App() {
           </div>
         </header>
 
+        {/* Messages */}
         <div className="messages-area">
-          {messages.length === 1 && messages[0].id === "welcome" && (
-            <div className="welcome-block">
-              <div className="welcome-orb">
-                <Sparkles size={26} />
+          {messages.length === 1 &&
+            messages[0].id === "welcome" && (
+              <div className="welcome-block">
+                <div className="welcome-orb">
+                  <Sparkles size={26} />
+                </div>
+
+                <p className="eyebrow">
+                  A LITTLE HELP GOES A LONG WAY
+                </p>
+
+                <h2>What’s on your mind?</h2>
+
+                <p className="welcome-subtitle">
+                  Ask a question, explore an idea, or turn a challenge into a plan.
+                </p>
+
+                <div className="welcome-suggestions">
+                  {suggestions.map((suggestion) => (
+                    <button
+                      key={suggestion.title}
+                      className="welcome-suggestion"
+                      onClick={() =>
+                        void sendMessage(undefined, suggestion.prompt)
+                      }
+                      disabled={loading}
+                    >
+                      <span>{suggestion.icon}</span>
+                      <strong>{suggestion.title}</strong>
+                      <small>{suggestion.prompt}</small>
+                    </button>
+                  ))}
+                </div>
               </div>
-
-              <p className="eyebrow">A LITTLE HELP GOES A LONG WAY</p>
-              <h2>What’s on your mind?</h2>
-
-              <p className="welcome-subtitle">
-                Ask a question, explore an idea, or turn a challenge into a plan.
-              </p>
-
-              <div className="welcome-suggestions">
-                {suggestions.map((suggestion) => (
-                  <button
-                    key={suggestion.title}
-                    className="welcome-suggestion"
-                    onClick={() => void sendMessage(undefined, suggestion.prompt)}
-                    disabled={loading}
-                  >
-                    <span>{suggestion.icon}</span>
-                    <strong>{suggestion.title}</strong>
-                    <small>{suggestion.prompt}</small>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+            )}
 
           <div className="messages-list">
             {messages.map((message) => (
@@ -396,15 +438,19 @@ export default function App() {
                 key={message.id}
               >
                 <div className={`message-avatar ${message.role}`}>
-                  {message.role === "assistant"
-                    ? <Sparkles size={17} />
-                    : <UserRound size={17} />}
+                  {message.role === "assistant" ? (
+                    <Sparkles size={17} />
+                  ) : (
+                    <UserRound size={17} />
+                  )}
                 </div>
 
                 <div className="message-content">
                   <div className="message-meta">
                     <span className="message-author">
-                      {message.role === "assistant" ? "AI Assistant" : "You"}
+                      {message.role === "assistant"
+                        ? "AI Assistant"
+                        : "You"}
                     </span>
 
                     {message.role === "assistant" &&
@@ -415,11 +461,16 @@ export default function App() {
                           title="Copy response"
                           aria-label="Copy response"
                         >
-                          {copiedId === message.id
-                            ? <Check size={14} />
-                            : <Copy size={14} />}
+                          {copiedId === message.id ? (
+                            <Check size={14} />
+                          ) : (
+                            <Copy size={14} />
+                          )}
+
                           <span>
-                            {copiedId === message.id ? "Copied" : "Copy"}
+                            {copiedId === message.id
+                              ? "Copied"
+                              : "Copy"}
                           </span>
                         </button>
                       )}
@@ -429,13 +480,16 @@ export default function App() {
                     {message.role === "assistant" ? (
                       <MarkdownMessage text={message.text} />
                     ) : (
-                      <div className="user-message-text">{message.text}</div>
+                      <div className="user-message-text">
+                        {message.text}
+                      </div>
                     )}
                   </div>
                 </div>
               </div>
             ))}
 
+            {/* Loading indicator */}
             {loading && (
               <div className="message-row assistant">
                 <div className="message-avatar assistant">
@@ -443,13 +497,18 @@ export default function App() {
                 </div>
 
                 <div className="message-content">
-                  <span className="message-author">AI Assistant</span>
+                  <span className="message-author">
+                    AI Assistant
+                  </span>
 
                   <div className="message-bubble typing-bubble">
                     <span className="typing-dot" />
                     <span className="typing-dot" />
                     <span className="typing-dot" />
-                    <span className="typing-label">Thinking...</span>
+
+                    <span className="typing-label">
+                      Thinking...
+                    </span>
                   </div>
                 </div>
               </div>
@@ -459,19 +518,23 @@ export default function App() {
           </div>
         </div>
 
+        {/* Message composer */}
         <div className="composer-wrap">
           {!connected && (
             <p className="connection-note">
-              Start the FastAPI backend at <code>127.0.0.1:8000</code> to chat.
+              Start the FastAPI backend at{" "}
+              <code>127.0.0.1:8000</code> to chat.
             </p>
           )}
 
           {error && (
             <div className="error-banner" role="alert">
               <span>{error}</span>
+
               <button
                 onClick={() => setError("")}
                 aria-label="Dismiss error"
+                title="Dismiss error"
               >
                 ×
               </button>
