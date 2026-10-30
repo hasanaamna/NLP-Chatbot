@@ -1,5 +1,9 @@
-
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -23,13 +27,18 @@ type Message = {
 };
 
 type ChatResponse = {
-  conversation_id: string;
-  response: string;
+  conversation_id?: string;
+  response?: string;
   model?: string;
   detail?: string;
 };
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = (
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"
+).replace(/\/+$/, "");
+
+const REQUEST_TIMEOUT = 60000;
+const HEALTH_CHECK_INTERVAL = 15000;
 
 const suggestions = [
   {
@@ -60,6 +69,45 @@ const initialMessage: Message = {
   text: "Hi! I'm your AI assistant. Ask me a question, explore an idea, or work through a problem with me. What would you like to talk about?",
 };
 
+function createMessageId(): string {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function getErrorMessage(
+  status: number,
+  detail?: string,
+): string {
+  if (status === 429) {
+    return (
+      detail ||
+      "The AI service has reached its usage limit. Please wait before trying again."
+    );
+  }
+
+  if (status === 401 || status === 403) {
+    return (
+      detail ||
+      "The AI service rejected the request. Please check the backend API configuration."
+    );
+  }
+
+  if (status >= 500) {
+    return (
+      detail ||
+      "The backend or AI service encountered an error. Please try again later."
+    );
+  }
+
+  return detail || `The server returned HTTP ${status}.`;
+}
+
 function MarkdownMessage({ text }: { text: string }) {
   return (
     <div className="markdown-content">
@@ -85,31 +133,51 @@ function MarkdownMessage({ text }: { text: string }) {
 }
 
 export default function App() {
-  const [messages, setMessages] = useState<Message[]>([initialMessage]);
+  const [messages, setMessages] = useState<Message[]>([
+    initialMessage,
+  ]);
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
-  const [conversationId, setConversationId] = useState<string | null>(null);
+
+  const [conversationId, setConversationId] = useState<
+    string | null
+  >(null);
+
   const [modelName, setModelName] = useState("Groq AI");
   const [error, setError] = useState("");
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(
+    null,
+  );
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const requestInProgressRef = useRef(false);
 
   // Check whether the FastAPI backend is available.
   useEffect(() => {
     let mounted = true;
+    let healthController: AbortController | null = null;
 
     async function checkHealth() {
-      try {
-        const response = await fetch(`${API_URL}/health`);
+      healthController?.abort();
 
-        if (mounted) {
+      const controller = new AbortController();
+      healthController = controller;
+
+      try {
+        const response = await fetch(`${API_URL}/health`, {
+          method: "GET",
+          signal: controller.signal,
+          cache: "no-store",
+        });
+
+        if (mounted && !controller.signal.aborted) {
           setConnected(response.ok);
         }
       } catch {
-        if (mounted) {
+        if (mounted && !controller.signal.aborted) {
           setConnected(false);
         }
       }
@@ -119,10 +187,11 @@ export default function App() {
 
     const interval = window.setInterval(() => {
       void checkHealth();
-    }, 10000);
+    }, HEALTH_CHECK_INTERVAL);
 
     return () => {
       mounted = false;
+      healthController?.abort();
       window.clearInterval(interval);
     };
   }, []);
@@ -144,21 +213,32 @@ export default function App() {
 
     const text = (suggestedText ?? input).trim();
 
-    if (!text || loading) {
+    if (!text || requestInProgressRef.current) {
       return;
     }
 
+    requestInProgressRef.current = true;
+
     setError("");
     setInput("");
+    setLoading(true);
 
     const userMessage: Message = {
-      id: crypto.randomUUID(),
+      id: createMessageId(),
       role: "user",
       text,
     };
 
-    setMessages((current) => [...current, userMessage]);
-    setLoading(true);
+    setMessages((current) => [
+      ...current,
+      userMessage,
+    ]);
+
+    const controller = new AbortController();
+
+    const timeoutId = window.setTimeout(() => {
+      controller.abort();
+    }, REQUEST_TIMEOUT);
 
     try {
       const response = await fetch(`${API_URL}/chat`, {
@@ -166,6 +246,7 @@ export default function App() {
         headers: {
           "Content-Type": "application/json",
         },
+        signal: controller.signal,
         body: JSON.stringify({
           message: text,
           ...(conversationId
@@ -174,21 +255,33 @@ export default function App() {
         }),
       });
 
-      const data = (await response.json().catch(() => ({}))) as
-        Partial<ChatResponse>;
+      let data: ChatResponse = {};
 
-      if (!response.ok) {
-        const errorMessage =
-          typeof data.detail === "string"
-            ? data.detail
-            : `The server returned HTTP ${response.status}.`;
-
-        throw new Error(errorMessage);
+      try {
+        data = (await response.json()) as ChatResponse;
+      } catch {
+        data = {};
       }
 
-      if (!data.response || !data.conversation_id) {
+      if (!response.ok) {
         throw new Error(
-          "The server returned an incomplete response. Please try again.",
+          getErrorMessage(
+            response.status,
+            typeof data.detail === "string"
+              ? data.detail
+              : undefined,
+          ),
+        );
+      }
+
+      if (
+        typeof data.response !== "string" ||
+        !data.response.trim() ||
+        typeof data.conversation_id !== "string" ||
+        !data.conversation_id.trim()
+      ) {
+        throw new Error(
+          "The backend returned an incomplete response. Please check the /chat API response format.",
         );
       }
 
@@ -199,29 +292,49 @@ export default function App() {
       }
 
       const assistantMessage: Message = {
-        id: crypto.randomUUID(),
+        id: createMessageId(),
         role: "assistant",
         text: data.response,
       };
 
-      setMessages((current) => [...current, assistantMessage]);
+      setMessages((current) => [
+        ...current,
+        assistantMessage,
+      ]);
+
       setConnected(true);
     } catch (err) {
-      const message =
+      let message =
         err instanceof Error
           ? err.message
           : "Something went wrong. Please try again.";
 
-      // Show errors only in the error banner, not as duplicate chat messages.
-      setError(message);
-
       if (
-        message.toLowerCase().includes("fetch") ||
-        message.toLowerCase().includes("networkerror")
+        err instanceof DOMException &&
+        err.name === "AbortError"
       ) {
+        message =
+          "The request timed out. Please check your backend and try again.";
+      } else if (
+        message.toLowerCase().includes("failed to fetch") ||
+        message.toLowerCase().includes("networkerror") ||
+        message.toLowerCase().includes("load failed")
+      ) {
+        message =
+          "Unable to connect to the backend. Make sure FastAPI is running at " +
+          API_URL;
         setConnected(false);
       }
+
+      // Preserve the user's message so it can be sent again.
+      setInput((current) => current || text);
+
+      // Show the error only once in the error banner.
+      setError(message);
     } finally {
+      window.clearTimeout(timeoutId);
+
+      requestInProgressRef.current = false;
       setLoading(false);
 
       window.setTimeout(() => {
@@ -232,7 +345,7 @@ export default function App() {
 
   // Start a fresh conversation.
   function newConversation() {
-    if (loading) {
+    if (requestInProgressRef.current) {
       return;
     }
 
@@ -241,7 +354,7 @@ export default function App() {
     setMessages([
       {
         ...initialMessage,
-        id: crypto.randomUUID(),
+        id: createMessageId(),
         text: "New conversation started. What would you like to explore?",
       },
     ]);
@@ -256,6 +369,10 @@ export default function App() {
   // Copy an assistant response.
   async function copyMessage(message: Message) {
     try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("Clipboard unavailable");
+      }
+
       await navigator.clipboard.writeText(message.text);
 
       setCopiedId(message.id);
@@ -266,7 +383,9 @@ export default function App() {
         );
       }, 1600);
     } catch {
-      setError("Clipboard access isn't available in this browser.");
+      setError(
+        "Unable to copy the response. Check your browser's clipboard permissions.",
+      );
     }
   }
 
@@ -295,7 +414,9 @@ export default function App() {
         </button>
 
         <div className="sidebar-section">
-          <span className="section-label">START WITH AN IDEA</span>
+          <span className="section-label">
+            START WITH AN IDEA
+          </span>
 
           {suggestions.map((suggestion) => (
             <button
@@ -310,6 +431,7 @@ export default function App() {
               <span className="suggestion-icon">
                 {suggestion.icon}
               </span>
+
               <span>{suggestion.title}</span>
             </button>
           ))}
@@ -332,7 +454,9 @@ export default function App() {
             </span>
 
             <span
-              className={`status-dot ${connected ? "active" : ""}`}
+              className={`status-dot ${
+                connected ? "active" : ""
+              }`}
             />
           </div>
 
@@ -348,7 +472,8 @@ export default function App() {
           </div>
 
           <p className="privacy-note">
-            Conversation context stays in memory while the backend is running.
+            Conversation context stays in memory while the
+            backend is running.
           </p>
         </div>
       </aside>
@@ -366,8 +491,11 @@ export default function App() {
 
               <p>
                 <span
-                  className={`online-dot ${connected ? "active" : ""}`}
+                  className={`online-dot ${
+                    connected ? "active" : ""
+                  }`}
                 />
+
                 {connected
                   ? "Ready when you are"
                   : "Waiting for backend"}
@@ -409,7 +537,8 @@ export default function App() {
                 <h2>What’s on your mind?</h2>
 
                 <p className="welcome-subtitle">
-                  Ask a question, explore an idea, or turn a challenge into a plan.
+                  Ask a question, explore an idea, or turn a
+                  challenge into a plan.
                 </p>
 
                 <div className="welcome-suggestions">
@@ -418,7 +547,10 @@ export default function App() {
                       key={suggestion.title}
                       className="welcome-suggestion"
                       onClick={() =>
-                        void sendMessage(undefined, suggestion.prompt)
+                        void sendMessage(
+                          undefined,
+                          suggestion.prompt,
+                        )
                       }
                       disabled={loading}
                     >
@@ -437,7 +569,9 @@ export default function App() {
                 className={`message-row ${message.role}`}
                 key={message.id}
               >
-                <div className={`message-avatar ${message.role}`}>
+                <div
+                  className={`message-avatar ${message.role}`}
+                >
                   {message.role === "assistant" ? (
                     <Sparkles size={17} />
                   ) : (
@@ -457,7 +591,9 @@ export default function App() {
                       message.id !== "welcome" && (
                         <button
                           className="copy-button"
-                          onClick={() => void copyMessage(message)}
+                          onClick={() =>
+                            void copyMessage(message)
+                          }
                           title="Copy response"
                           aria-label="Copy response"
                         >
@@ -548,7 +684,9 @@ export default function App() {
             <input
               ref={inputRef}
               value={input}
-              onChange={(event) => setInput(event.target.value)}
+              onChange={(event) =>
+                setInput(event.target.value)
+              }
               placeholder="Message your AI assistant..."
               aria-label="Your message"
               maxLength={8000}
