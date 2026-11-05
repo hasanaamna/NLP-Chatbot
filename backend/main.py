@@ -139,8 +139,3 @@ def chat(request: ChatRequest):
             status_code=500,
             detail="An unexpected error occurred while generating the response.",
         ) from exc
-
-
-
-
-#bshcdx c
