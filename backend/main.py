@@ -138,10 +138,4 @@ def chat(request: ChatRequest):
         raise HTTPException(
             status_code=500,
             detail="An unexpected error occurred while generating the response.",
-        ) from exc
-
-
-
-
-
-        
+        ) from exc 
